@@ -4,10 +4,10 @@
 #include <Arduino_FreeRTOS.h>
 
 
-//RF24 radio (7, 8);
+RF24 radio (7, 8);
 
-//byte addresses1[][6] = {"AdrTX"};
-//byte addresses2[][6] = {"ArdRx"};
+byte addresses1[][6] = {"AdrTX"};
+byte addresses2[][6] = {"AdrRx"};
 
 typedef struct {  
   float temperature;
@@ -97,9 +97,28 @@ void TaskSendData(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
 
+  radio.begin();
+  radio.setChannel(100);
+  radio.setPALevel(RF24_PA_LOW);
+  radio.setDataRate(RF24_250KBPS);
+  radio.setAutoAck(1);
+  radio.enableAckPayload();
+  radio.enableDynamicPayloads();
+  radio.setRetries(15, 15);
+  radio.setCRCLength(RF24_CRC_8);
+  radio.openWritingPipe( addresses1[0]);
+
   for (;;) // A Task shall never return or exit.
   {
-    Serial.println("test");
+    Serial.println("Sending data");
+
+    if (isnan(data_rec.temperature)|| isnan(data_rec.humidity)) { 
+    Serial.println(F("Eroare citire senzor!"));
+    }else {
+    radio.write( &data_rec, sizeof(data_rec));
+    Serial.println("Data sent");
+    }
+    
     vTaskDelay(1000/portTICK_PERIOD_MS);
   }
 }
