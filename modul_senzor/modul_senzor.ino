@@ -4,17 +4,11 @@
 #include <Arduino_FreeRTOS.h>
 #include "semphr.h"
 
-
-
-RF24 radio (7, 8);
 #define DHTPIN 4       
 #define DHTTYPE DHT22
-DHT dht(DHTPIN, DHTTYPE);
 
-float TE_low_limit = 20;
-float TE_high_limit = 27;
-float HU_low_limit = 60;
-float HU_high_limit = 80;
+DHT dht(DHTPIN, DHTTYPE);
+RF24 radio (7, 8);
 
 byte addresses1[][6] = {"AdrTX"};
 byte addresses2[][6] = {"AdrRx"};
@@ -26,26 +20,24 @@ typedef struct {
 PACKET data_rec;
 
 typedef struct {  
-  boolean TElow = false;
-  boolean TEhigh = false;
-  boolean HUlow = false;
-  boolean HUhigh = false;
+  boolean tempL = 0;
+  boolean humL = 0;
 } STRUCT;
-STRUCT data_levels;
+STRUCT limits;
+
+SemaphoreHandle_t xBinarySemaphore;
 
 void TaskReadData(void *pvParameters);
 void TaskCheckData(void *pvParameters);
 void TaskSendData(void *pvParameters);
-
-//SemaphoreHandle_t xBinarySemaphore;
 
 TaskHandle_t Task_Handle1;
 TaskHandle_t Task_Handle2;
 TaskHandle_t Task_Handle3;
 
 void setup() {
-  
   Serial.begin(9600);
+  
   dht.begin();
   pinMode(8, OUTPUT);
   digitalWrite(8, HIGH);
@@ -60,16 +52,12 @@ void setup() {
   radio.setRetries(15, 15);
   radio.setCRCLength(RF24_CRC_8);
   radio.openWritingPipe( addresses1[0]);
-  
-  //xBinarySemaphore = xSemaphoreCreateBinary();
-  //stiva trebuie pusa 192 + cat ocupa restul de functii/variabile
+
+  xBinarySemaphore = xSemaphoreCreateBinary();
   xTaskCreate(TaskReadData,"Task1",512,NULL,2,&Task_Handle1);
-  xTaskCreate(TaskCheckData,"Task2",256,NULL,1,&Task_Handle2);
+  xTaskCreate(TaskCheckData,"Task2",100,NULL,1,&Task_Handle2);
   xTaskCreate(TaskSendData,"Task3",128,NULL,1,&Task_Handle3);
-
-  //xSemaphoreGive(xBinarySemaphore);
-  
-
+  xSemaphoreGive(xBinarySemaphore);
 }
 void loop() {
   // put your main code here, to run repeatedly:
@@ -82,54 +70,46 @@ void TaskReadData(void *pvParameters)  // This is a task.
   
   for (;;) // A Task shall never return or exit.
   { 
-    //xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
+    xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
     data_rec.temperature= dht.readTemperature();
     data_rec.humidity = dht.readHumidity();
-
-    //trebuie sa fac mutex-uri pentru fiecare Serial.print
     Serial.print("Temperatura:");
     Serial.println(data_rec.temperature);
     Serial.print("Umiditate:");
     Serial.println(data_rec.humidity);
+    xSemaphoreGive(xBinarySemaphore);
     vTaskDelay(1000/portTICK_PERIOD_MS);
-    //xSemaphoreGive(xBinarySemaphore);
   }
-  
 }
-
 
 void TaskCheckData(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
-  
 
   for (;;) // A Task shall never return or exit.
   {
-    //xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
-    if(data_rec.temperature > TE_high_limit){
-      data_levels.TEhigh = true;
-      data_levels.TElow = false;
-      Serial.println("Temp too high, turning the heating system off ");
-    }else if(data_rec.temperature < TE_low_limit){
-      data_levels.TElow = true;
-      data_levels.TEhigh = false;
-      Serial.println("Temp too low, turning the heating system on ");
+    xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
+    float temp_limit = 22;
+    float hum_limit = 70;
+    if(data_rec.temperature > temp_limit){
+      //Serial.println("Temp = HIGH");
+      limits.tempL= 1;
     }else{
-      Serial.print("Temp=ok");
+      //Serial.println("Temp = LOW");
+      limits.tempL= 0;
+    }
+    
+    if(data_rec.humidity > hum_limit){
+      //Serial.println("Hum = HIGH");
+      limits.humL= 1;
+    }else{
+      //Serial.println("Hum = LOW");
+      limits.humL= 0;
     }
 
-    if(data_rec.humidity > HU_high_limit){
-      data_levels.HUhigh = true;
-      data_levels.HUlow =false;
-      Serial.println("Humidity too high, turning the dehumidifier on ");
-    }else if(data_rec.humidity < HU_low_limit){
-      data_levels.HUlow =true;
-      data_levels.HUhigh = false;
-      Serial.println("Humidity too low, turning the dehumidifier off ");
-    }else{
-      Serial.print("Hum=ok");
-    }
-    //xSemaphoreGive(xBinarySemaphore);
+    Serial.println(limits.tempL);
+    Serial.println(limits.humL);
+    xSemaphoreGive(xBinarySemaphore);
     vTaskDelay(1000/portTICK_PERIOD_MS);
   }
 }
@@ -138,19 +118,22 @@ void TaskCheckData(void *pvParameters)  // This is a task.
 void TaskSendData(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
-  
+
 
   for (;;) // A Task shall never return or exit.
-  {   
-    //xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
+  {
+    xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
     Serial.println("Sending data");
 
-    //if (isnan(data_rec.temperature)|| isnan(data_rec.humidity)) { 
-    //Serial.println(F("Eroare citire senzor!"));
-    //}else {}
-    radio.write( &data_levels, sizeof(data_levels));
+    if (isnan(data_rec.temperature)|| isnan(data_rec.humidity)) { 
+    Serial.println(F("Eroare citire senzor!"));
+    }else {
+    radio.write( &limits, sizeof(limits));
     Serial.println("Data sent");
-    //xSemaphoreGive(xBinarySemaphore);
-    vTaskDelay(100/portTICK_PERIOD_MS);
+    }
+    
+    xSemaphoreGive(xBinarySemaphore);
+    
+    vTaskDelay(1000/portTICK_PERIOD_MS);
   }
 }

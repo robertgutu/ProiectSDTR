@@ -1,29 +1,26 @@
 #include <SPI.h>   
 #include "RF24.h" 
 #include <Arduino_FreeRTOS.h>
+#include "semphr.h"
 
 RF24 radio (7, 8);
 
 byte addresses1[][6] = {"AdrTX"};
 byte addresses2[][6] = {"AdrRx"};
 
-
-
 typedef struct {  
-  boolean TElow;
-  boolean TEhigh;
-  boolean HUlow;
-  boolean HUhigh;
-} PACKET;
-PACKET data_levels;
+  boolean tempL = 0;
+  boolean humL = 0;
+} STRUCT;
+STRUCT limits;
+
+SemaphoreHandle_t xBinarySemaphore;
 
 void TaskRecData(void *pvParameters);
-void TaskTemp(void *pvParameters);
-void TaskHum(void *pvParameters);
+void TaskCheck(void *pvParameters);
 
 TaskHandle_t Task_Handle1;
 TaskHandle_t Task_Handle2;
-TaskHandle_t Task_Handle3;
 
 void setup() {
   // put your setup code here, to run once:
@@ -40,9 +37,11 @@ void setup() {
   radio.openReadingPipe(1, addresses1[0]);
   radio.startListening();
   
-  xTaskCreate(TaskRecData,"Task1",512,NULL,2,&Task_Handle1);
-  xTaskCreate(TaskTemp,"Task1",256,NULL,2,&Task_Handle2);
-  xTaskCreate(TaskHum,"Task1",256,NULL,2,&Task_Handle3);
+  xBinarySemaphore = xSemaphoreCreateBinary();
+  xTaskCreate(TaskRecData,"Task1",512,NULL,0,&Task_Handle1);
+  xTaskCreate(TaskCheck,"Task2",256,NULL,0,&Task_Handle2);
+  xSemaphoreGive(xBinarySemaphore);
+
 }
 
 void loop() {
@@ -54,20 +53,27 @@ void TaskRecData(void *pvParameters){
   (void) pvParameters;
   
   for (;;) {
+    xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
     if (radio.available())
     {
-      radio.read( &data_levels, sizeof(data_levels));
-      Serial.println(data_levels.TElow);
-      Serial.println(data_levels.TEhigh);   
+      radio.read( &limits, sizeof(limits));
+      Serial.println(limits.tempL);
+      Serial.println(limits.humL);   
+    }
+    xSemaphoreGive(xBinarySemaphore);
   }
 }
 
-void TaskTemp(void *pvParameters){
+void TaskCheck(void *pvParameters){
   (void) pvParameters;
   
-}
-
-void TaskHum(void *pvParameters){
-  (void) pvParameters;
-  
+  for (;;) {
+    xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
+    if(limits.tempL=1){
+      Serial.println("turning the cooler on for 10 sec");
+      delay(10000);
+      Serial.println("Turning the cooler off");
+    }
+    xSemaphoreGive(xBinarySemaphore);
+  }
 }
