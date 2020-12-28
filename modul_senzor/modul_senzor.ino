@@ -20,8 +20,8 @@ typedef struct {
 PACKET data_rec;
 
 typedef struct {  
-  boolean tempL = 0;
-  boolean humL = 0;
+  boolean tempL = false;
+  boolean humL = false;
 } STRUCT;
 STRUCT limits;
 
@@ -46,11 +46,13 @@ void setup() {
   radio.setChannel(100);
   radio.setPALevel(RF24_PA_LOW);
   radio.setDataRate(RF24_250KBPS);
+  /*
   radio.setAutoAck(1);
   radio.enableAckPayload();
   radio.enableDynamicPayloads();
   radio.setRetries(15, 15);
   radio.setCRCLength(RF24_CRC_8);
+  */
   radio.openWritingPipe( addresses1[0]);
 
   xBinarySemaphore = xSemaphoreCreateBinary();
@@ -89,22 +91,22 @@ void TaskCheckData(void *pvParameters)  // This is a task.
   for (;;) // A Task shall never return or exit.
   {
     xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
-    float temp_limit = 22;
+    float temp_limit = 35;
     float hum_limit = 70;
     if(data_rec.temperature > temp_limit){
       //Serial.println("Temp = HIGH");
-      limits.tempL= 1;
+      limits.tempL= true;
     }else{
       //Serial.println("Temp = LOW");
-      limits.tempL= 0;
+      limits.tempL= false;
     }
     
     if(data_rec.humidity > hum_limit){
       //Serial.println("Hum = HIGH");
-      limits.humL= 1;
+      limits.humL= true;
     }else{
       //Serial.println("Hum = LOW");
-      limits.humL= 0;
+      limits.humL= false;
     }
 
     Serial.println(limits.tempL);
@@ -126,7 +128,7 @@ void TaskSendData(void *pvParameters)  // This is a task.
     Serial.println("Sending data");
 
     if (isnan(data_rec.temperature)|| isnan(data_rec.humidity)) { 
-    Serial.println(F("Eroare citire senzor!"));
+    Serial.println("Eroare citire senzor!");
     }else {
     radio.write( &limits, sizeof(limits));
     Serial.println("Data sent");

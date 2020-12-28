@@ -9,18 +9,20 @@ byte addresses1[][6] = {"AdrTX"};
 byte addresses2[][6] = {"AdrRx"};
 
 typedef struct {  
-  boolean tempL = 0;
-  boolean humL = 0;
+  boolean tempL ;
+  boolean humL ;
 } STRUCT;
 STRUCT limits;
 
 SemaphoreHandle_t xBinarySemaphore;
 
 void TaskRecData(void *pvParameters);
-void TaskCheck(void *pvParameters);
+void TaskCheckTemp(void *pvParameters);
+void TaskCheckHum(void *pvParameters);
 
 TaskHandle_t Task_Handle1;
 TaskHandle_t Task_Handle2;
+TaskHandle_t Task_Handle3;
 
 void setup() {
   // put your setup code here, to run once:
@@ -29,17 +31,20 @@ void setup() {
   radio.setChannel(100);
   radio.setPALevel(RF24_PA_LOW);
   radio.setDataRate(RF24_250KBPS);
+  /*
   radio.setAutoAck(1);
   radio.enableAckPayload();
   radio.enableDynamicPayloads();
   radio.setRetries(15, 15);
   radio.setCRCLength(RF24_CRC_8);
+  */
   radio.openReadingPipe(1, addresses1[0]);
   radio.startListening();
   
   xBinarySemaphore = xSemaphoreCreateBinary();
-  xTaskCreate(TaskRecData,"Task1",512,NULL,0,&Task_Handle1);
-  xTaskCreate(TaskCheck,"Task2",256,NULL,0,&Task_Handle2);
+  xTaskCreate(TaskRecData,"Task1",256,NULL,0,&Task_Handle1);
+  xTaskCreate(TaskCheckTemp,"Task2",256,NULL,0,&Task_Handle2);
+  xTaskCreate(TaskCheckHum,"Task3",256,NULL,0,&Task_Handle3);
   xSemaphoreGive(xBinarySemaphore);
 
 }
@@ -61,19 +66,37 @@ void TaskRecData(void *pvParameters){
       Serial.println(limits.humL);   
     }
     xSemaphoreGive(xBinarySemaphore);
+    vTaskDelay(1000/portTICK_PERIOD_MS);
   }
 }
 
-void TaskCheck(void *pvParameters){
+void TaskCheckTemp(void *pvParameters){
   (void) pvParameters;
   
   for (;;) {
     xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
-    if(limits.tempL=1){
-      Serial.println("turning the cooler on for 10 sec");
-      delay(10000);
-      Serial.println("Turning the cooler off");
+    if(limits.tempL == true){
+      Serial.println("Pornire sistem de racire");
+    }else{
+      Serial.println("Oprire sistem de racire");
     }
     xSemaphoreGive(xBinarySemaphore);
+    vTaskDelay(1000/portTICK_PERIOD_MS);
+  }
+}
+
+void TaskCheckHum(void *pvParameters){
+  (void) pvParameters;
+  
+  for (;;) {
+    xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
+    if(limits.humL == true){
+      Serial.println("Pornire dezumidificator ");
+      
+    }else{
+      Serial.println("Oprire dezumidificator ");;
+    }
+    xSemaphoreGive(xBinarySemaphore);
+    vTaskDelay(1000/portTICK_PERIOD_MS);
   }
 }
