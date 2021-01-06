@@ -91,7 +91,7 @@ void TaskCheckData(void *pvParameters)  // This is a task.
   for (;;) // A Task shall never return or exit.
   {
     xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
-    float temp_limit = 35;
+    float temp_limit = 25;
     float hum_limit = 70;
     if(data_rec.temperature > temp_limit){
       //Serial.println("Temp = HIGH");

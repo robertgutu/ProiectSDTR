@@ -4,7 +4,8 @@
 #include "semphr.h"
 
 RF24 radio (7, 8);
-
+int led_temp = 2;
+int led_hum = 3;
 byte addresses1[][6] = {"AdrTX"};
 byte addresses2[][6] = {"AdrRx"};
 
@@ -26,6 +27,8 @@ TaskHandle_t Task_Handle3;
 
 void setup() {
   // put your setup code here, to run once:
+  pinMode(led_temp,OUTPUT);
+  pinMode(led_hum,OUTPUT);
   Serial.begin(9600);
   radio.begin();
   radio.setChannel(100);
@@ -77,8 +80,10 @@ void TaskCheckTemp(void *pvParameters){
     xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
     if(limits.tempL == true){
       Serial.println("Pornire sistem de racire");
+      digitalWrite(led_temp, HIGH);
     }else{
       Serial.println("Oprire sistem de racire");
+      digitalWrite(led_temp, LOW);
     }
     xSemaphoreGive(xBinarySemaphore);
     vTaskDelay(1000/portTICK_PERIOD_MS);
@@ -92,9 +97,10 @@ void TaskCheckHum(void *pvParameters){
     xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
     if(limits.humL == true){
       Serial.println("Pornire dezumidificator ");
-      
+      digitalWrite(led_hum, HIGH);
     }else{
-      Serial.println("Oprire dezumidificator ");;
+      Serial.println("Oprire dezumidificator ");
+      digitalWrite(led_hum, LOW);
     }
     xSemaphoreGive(xBinarySemaphore);
     vTaskDelay(1000/portTICK_PERIOD_MS);
