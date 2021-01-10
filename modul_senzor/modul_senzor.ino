@@ -3,12 +3,14 @@
 #include <DHT.h>
 #include <Arduino_FreeRTOS.h>
 #include "semphr.h"
+#include <LiquidCrystal.h>
 
 #define DHTPIN 4       
 #define DHTTYPE DHT22
 
 DHT dht(DHTPIN, DHTTYPE);
 RF24 radio (7, 8);
+LiquidCrystal lcd(10, 9, 3, 2, 6, 5);
 
 byte addresses1[][6] = {"AdrTX"};
 byte addresses2[][6] = {"AdrRx"};
@@ -41,6 +43,7 @@ void setup() {
   dht.begin();
   pinMode(8, OUTPUT);
   digitalWrite(8, HIGH);
+  lcd.begin(16, 2);
   
   radio.begin();
   radio.setChannel(100);
@@ -70,6 +73,15 @@ void TaskReadData(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
   
+  lcd.print("Temp:");
+  lcd.setCursor(10,0);
+  lcd.print(char(223));
+  lcd.print("C");
+  lcd.setCursor(0,1);
+  lcd.print("Hum :");
+  lcd.setCursor(10,1);
+  lcd.print("%");
+  
   for (;;) // A Task shall never return or exit.
   { 
     xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
@@ -78,7 +90,11 @@ void TaskReadData(void *pvParameters)  // This is a task.
     Serial.print("Temperatura:");
     Serial.println(data_rec.temperature);
     Serial.print("Umiditate:");
-    Serial.println(data_rec.humidity);
+    Serial.println(data_rec.humidity); 
+    lcd.setCursor(5,0);
+    lcd.print(data_rec.temperature);
+    lcd.setCursor(5,1);
+    lcd.print(data_rec.humidity);
     xSemaphoreGive(xBinarySemaphore);
     vTaskDelay(1000/portTICK_PERIOD_MS);
   }
@@ -91,7 +107,7 @@ void TaskCheckData(void *pvParameters)  // This is a task.
   for (;;) // A Task shall never return or exit.
   {
     xSemaphoreTake(xBinarySemaphore,portMAX_DELAY);
-    float temp_limit = 25;
+    float temp_limit = 24;
     float hum_limit = 70;
     if(data_rec.temperature > temp_limit){
       //Serial.println("Temp = HIGH");
